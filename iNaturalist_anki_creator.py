@@ -5,22 +5,29 @@ import urllib.request
 import json
 import base64
 
-# Prompt user for species name and number of observations
-species_name = input("Enter the species name: ")
-num_observations = int(input("Enter the number of observations: "))
+# Prompt user for taxon ID
+taxon_id = input("Enter the taxon ID: ")
 
-# iNaturalist API endpoint for getting observations
-API_ENDPOINT = "https://api.inaturalist.org/v1/observations"
+# iNaturalist API endpoint for getting taxon and observations
+TAXON_ENDPOINT = "https://api.inaturalist.org/v1/taxa/"
+OBSERVATIONS_ENDPOINT = "https://api.inaturalist.org/v1/observations"
+
+# Get the taxon information
+response = requests.get(TAXON_ENDPOINT + taxon_id)
+taxon_data = response.json()["results"][0]
+
+# Get the Wikipedia summary from the API
+wikipedia_summary = taxon_data["wikipedia_summary"]
 
 # Define the parameters for the API request
 params = {
-    "taxon_name": species_name,
+    "taxon_id": taxon_id,
     "quality_grade": "research",
-    "per_page": num_observations,
+    "per_page": 10,
 }
 
-# Make the API request
-response = requests.get(API_ENDPOINT, params=params)
+# Get the observations
+response = requests.get(OBSERVATIONS_ENDPOINT, params=params)
 data = response.json()
 
 # Dump the results into a text file for debugging
@@ -47,6 +54,34 @@ model = genanki.Model(
 # Create a deck
 deck = genanki.Deck(2059400110, "iNaturalist Deck")
 
+# Create a card for the taxon
+taxon_common_name = taxon_data["preferred_common_name"]
+taxon_name = taxon_data["name"]
+
+answer = f"Common Name: {taxon_common_name}<br>"
+answer += f"Taxon Name: {taxon_name}<br>"
+answer += f"Wikipedia Summary: {wikipedia_summary}"
+
+taxon_photos = taxon_data["taxon_photos"]
+img_data = ""
+for taxon_photo in taxon_photos:
+    img_url = taxon_photo["photo"]["medium_url"]
+    img_path = os.path.join(os.getcwd(), "taxon_" + os.path.basename(img_url))
+    urllib.request.urlretrieve(img_url, img_path)
+
+    with open(img_path, "rb") as img_file:
+        img_base64 = base64.b64encode(img_file.read()).decode("utf-8")
+    img_data += f'<img src="data:image/jpeg;base64,{img_base64}" /><br>'
+
+question = img_data
+print(img_data)
+
+taxon_card = genanki.Note(
+    model=model,
+    fields=[question, answer],
+)
+deck.add_note(taxon_card)
+
 # Iterate through the observations and add cards to the deck
 for observation in data["results"]:
     img_data = ""
@@ -64,7 +99,7 @@ for observation in data["results"]:
         img_data += f'<img src="data:image/jpeg;base64,{img_base64}" /><br>'
         
     question = img_data
-    answer = species_name
+    
     card = genanki.Note(
         model=model,
         fields=[question, answer],
