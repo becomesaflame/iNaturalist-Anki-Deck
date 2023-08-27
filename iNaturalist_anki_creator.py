@@ -5,8 +5,9 @@ import urllib.request
 import json
 import base64
 
-# Prompt user for taxon ID
-taxon_id = input("Enter the taxon ID: ")
+# Prompt user for taxon URL
+taxon_url = input("Enter the taxon URL: ")
+taxon_id = taxon_url.split("/")[4].split("-")[0]
 
 # iNaturalist API endpoint for getting taxon and observations
 TAXON_ENDPOINT = "https://api.inaturalist.org/v1/taxa/"
@@ -74,7 +75,6 @@ for taxon_photo in taxon_photos:
     img_data += f'<img src="data:image/jpeg;base64,{img_base64}" /><br>'
 
 question = img_data
-print(img_data)
 
 taxon_card = genanki.Note(
     model=model,
