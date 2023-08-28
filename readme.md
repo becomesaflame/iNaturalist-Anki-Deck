@@ -41,5 +41,5 @@ Each observation card includes all the medium-sized images from the observation.
 The back of each card includes the common name, taxon name, default photo, and Wikipedia summary of the taxon.
 
 # AI Credit
-This script was written with the help of chatGPT (GPT-4). To view the chat and make updates to the script using ChatGPT, visit the following URL:
+This script was written with the help of chatGPT (GPT-4). To view the chat and make updates to the script using ChatGPT, visit the following URL:  
 https://chat.openai.com/c/0d9c6a68-2c20-43ab-9bf2-087f59da779f
