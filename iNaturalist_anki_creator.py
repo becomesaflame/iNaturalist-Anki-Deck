@@ -9,6 +9,10 @@ import base64
 TAXON_ENDPOINT = "https://api.inaturalist.org/v1/taxa/"
 OBSERVATIONS_ENDPOINT = "https://api.inaturalist.org/v1/observations"
 
+# Save the images to a local directory
+os.makedirs('media', exist_ok=True)
+media_files = []
+
 # Define the Anki Model
 model = genanki.Model(
     1607392319,
@@ -55,12 +59,11 @@ while True:
     img_data = ""
     for taxon_photo in taxon_photos:
         img_url = taxon_photo["photo"]["medium_url"]
-        img_path = os.path.join(os.getcwd(), "taxon_" + os.path.basename(img_url))
+        img_name = "taxon_" + os.path.basename(img_url)
+        img_path = os.path.join('media', img_name)
         urllib.request.urlretrieve(img_url, img_path)
-
-        with open(img_path, "rb") as img_file:
-            img_base64 = base64.b64encode(img_file.read()).decode("utf-8")
-        img_data += f'<img src="data:image/jpeg;base64,{img_base64}" /><br>'
+        media_files.append(img_path)
+        img_data += f'<img src="{img_name}" /><br>'
 
     question = img_data
 
@@ -93,13 +96,10 @@ while True:
             img_url = photo["url"].replace("square", "medium")
             # Download the image
             img_name = f"{observation['id']}_{idx}.jpg"
-            img_path = os.path.join(os.getcwd(), img_name)
+            img_path = os.path.join('media', img_name)
             urllib.request.urlretrieve(img_url, img_path)
-            
-            # Convert image to base64
-            with open(img_path, "rb") as img_file:
-                img_base64 = base64.b64encode(img_file.read()).decode("utf-8")
-            img_data += f'<img src="data:image/jpeg;base64,{img_base64}" /><br>'
+            media_files.append(img_path)
+            img_data += f'<img src="{img_name}" /><br>'
             
         question = img_data
         
@@ -108,9 +108,9 @@ while True:
             fields=[question, answer],
         )
         deck.add_note(card)
-
-# Generate the Anki package
+        
+# Generate the Anki package and include the media files
 output_file = "iNaturalistDeck.apkg"
-genanki.Package(deck).write_to_file(output_file)
+genanki.Package(deck, media_files=media_files).write_to_file(output_file)
 
 print(f"Anki deck created: {output_file}")
