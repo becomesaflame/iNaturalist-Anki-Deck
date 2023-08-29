@@ -1,116 +1,127 @@
 import requests
 import genanki
+import re
 import os
-import urllib.request
-import json
-import base64
 
-# iNaturalist API endpoint for getting taxon and observations
-TAXON_ENDPOINT = "https://api.inaturalist.org/v1/taxa/"
-OBSERVATIONS_ENDPOINT = "https://api.inaturalist.org/v1/observations"
+# Function to get taxon data from iNaturalist
+def get_taxon_data(taxon_id):
+    response = requests.get(f"https://api.inaturalist.org/v1/taxa/{taxon_id}")
+    data = response.json()
+    return data['results'][0]
 
-# Save the images to a local directory
-os.makedirs('media', exist_ok=True)
-media_files = []
+# Function to get taxon photos from iNaturalist
+def get_taxon_photos(taxon_photos):
+    photos = ''
+    for photo in taxon_photos:
+        url = photo['photo']['medium_url']
+        photos += f'<img src="{url}"><br>'
+    return photos
 
-# Define the Anki Model
-model = genanki.Model(
-    1607392319,
-    "Simple Model",
-    fields=[
-        {"name": "Question"},
-        {"name": "Answer"},
-    ],
-    templates=[
+# Function to get observation data from iNaturalist
+def get_observations(taxon_id, num_observations):
+    response = requests.get(f"https://api.inaturalist.org/v1/observations?taxon_id={taxon_id}&quality_grade=research&per_page={num_observations}")
+    data = response.json()
+    return data['results']
+
+# Function to get observation photos from iNaturalist
+def get_observation_photos(observation_photos):
+    photos = ''
+    for photo in observation_photos:
+        url = photo['url']
+        photos += f'<img src="{url}"><br>'
+    return photos
+
+# Define the Anki model
+def create_model(num_observations):
+    fields = [
+        {'name': 'CommonName'},
+        {'name': 'ScientificName'},
+        {'name': 'WikipediaSummary'},
+        {'name': 'CustomDescription'},
+        {'name': 'iNaturalistID'},
+        {'name': 'TaxonPhotos'},
+    ]
+    for i in range(1, num_observations + 1):
+        fields.append({'name': f'Observation{i}Photos'})
+
+    templates = [
         {
-            "name": "Card 1",
-            "qfmt": "{{Question}}",
-            "afmt": "{{FrontSide}}<hr id='answer'>{{Answer}}",
+            'name': 'Taxon Card',
+            'qfmt': '{{TaxonPhotos}}',
+            'afmt': '{{FrontSide}}<hr id="answer">{{CommonName}}<br>{{ScientificName}}<br>{{WikipediaSummary}}<br>{{CustomDescription}}',
         },
-    ],
-)
+    ]
+    for i in range(1, num_observations + 1):
+        templates.append({
+            'name': f'Observation{i} Card',
+            'qfmt': f'{{{{Observation{i}Photos}}}}',
+            'afmt': '{{FrontSide}}<hr id="answer">{{CommonName}}<br>{{ScientificName}}<br>{{WikipediaSummary}}<br>{{CustomDescription}}',
+        })
 
-# Create a deck
+    model = genanki.Model(
+        1607392319,
+        'iNaturalist Model',
+        fields=fields,
+        templates=templates)
+
+    return model
+
+# Create the Anki deck
 deck = genanki.Deck(2059400110, "iNaturalist Deck")
 
+# Prompt the user for taxon URLs
+num_observations = 10
+taxon_urls = []
 while True:
-    # Prompt user for taxon URL and extract taxon ID
-    taxon_url = input("Enter the taxon URL (or 'D' or 'Done' to finish): ")
+    taxon_url = input("Enter taxon URL (or 'D' or 'Done' to finish): ")
     if taxon_url.lower() in ['d', 'done']:
         break
-    taxon_id = taxon_url.split("/")[-1].split("-")[0]
+    taxon_urls.append(taxon_url)
 
-    # Get the taxon information
-    response = requests.get(TAXON_ENDPOINT + taxon_id)
-    taxon_data = response.json()["results"][0]
+# Process each taxon URL
+for taxon_url in taxon_urls:
+    # Extract the taxon ID from the URL
+    taxon_id = taxon_url.split('/')[-1].split('-')[0]
 
-    # Get the Wikipedia summary from the API
-    wikipedia_summary = taxon_data["wikipedia_summary"]
+    # Fetch taxon data from iNaturalist
+    taxon_data = get_taxon_data(taxon_id)
 
-    # Create a card for the taxon
-    taxon_common_name = taxon_data["preferred_common_name"]
-    taxon_name = taxon_data["name"]
+    common_name = taxon_data['common_name']['name']
+    scientific_name = taxon_data['name']
+    wikipedia_summary = taxon_data['wikipedia_summary']
+    custom_description = ''
+    inaturalist_id = taxon_data['id']
+    taxon_photos = get_taxon_photos(taxon_data['taxon_photos'])
 
-    answer = f"Common Name: {taxon_common_name}<br>"
-    answer += f"Taxon Name: {taxon_name}<br>"
-    answer += f"Wikipedia Summary: {wikipedia_summary}"
+    # Fetch observation data from iNaturalist
+    observations = get_observations(taxon_id, num_observations)
 
-    taxon_photos = taxon_data["taxon_photos"]
-    img_data = ""
-    for taxon_photo in taxon_photos:
-        img_url = taxon_photo["photo"]["medium_url"]
-        img_name = "taxon_" + os.path.basename(img_url)
-        img_path = os.path.join('media', img_name)
-        urllib.request.urlretrieve(img_url, img_path)
-        media_files.append(img_path)
-        img_data += f'<img src="{img_name}" /><br>'
+    observation_photos = []
+    for observation in observations:
+        observation_photos.append(get_observation_photos(observation['photos']))
 
-    question = img_data
+    # Create the Anki note
+    model = create_model(num_observations)
+    fields = [
+        common_name,
+        scientific_name,
+        wikipedia_summary,
+        custom_description,
+        str(inaturalist_id),
+        taxon_photos,
+    ]
+    for observation_photo in observation_photos:
+        fields.append(observation_photo)
 
-    taxon_card = genanki.Note(
+    note = genanki.Note(
         model=model,
-        fields=[question, answer],
+        fields=fields,
     )
-    deck.add_note(taxon_card)
 
-    # Define the parameters for the API request
-    params = {
-        "taxon_id": taxon_id,
-        "quality_grade": "research",
-        "per_page": 10,
-    }
+    # Add the note to the deck
+    deck.add_note(note)
 
-    # Get the observations
-    response = requests.get(OBSERVATIONS_ENDPOINT, params=params)
-    data = response.json()
+# Save the deck to a file
+genanki.Package(deck).write_to_file('iNaturalistDeck.apkg')
 
-    # Dump the results into a text file for debugging
-    with open("data_results.txt", "w") as f:
-        json.dump(data["results"], f, indent=4)
-
-    # Iterate through the observations and add cards to the deck
-    for observation in data["results"]:
-        img_data = ""
-        for idx, photo in enumerate(observation["photos"]):
-            # Modify the URL to get the medium-sized image
-            img_url = photo["url"].replace("square", "medium")
-            # Download the image
-            img_name = f"{observation['id']}_{idx}.jpg"
-            img_path = os.path.join('media', img_name)
-            urllib.request.urlretrieve(img_url, img_path)
-            media_files.append(img_path)
-            img_data += f'<img src="{img_name}" /><br>'
-            
-        question = img_data
-        
-        card = genanki.Note(
-            model=model,
-            fields=[question, answer],
-        )
-        deck.add_note(card)
-        
-# Generate the Anki package and include the media files
-output_file = "iNaturalistDeck.apkg"
-genanki.Package(deck, media_files=media_files).write_to_file(output_file)
-
-print(f"Anki deck created: {output_file}")
+print("Anki deck created successfully!")
